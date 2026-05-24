@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QR 스캔</title>
+  <script src="config.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #111;
+      color: #fff;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    #reader {
+      width: min(520px, 95vw);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    #reader video { transform: scaleX(-1); }
+    #status {
+      margin-top: 1.25rem;
+      font-size: .95rem;
+      color: #9ca3af;
+    }
+    /* Full-screen result overlay */
+    #overlay {
+      position: fixed;
+      inset: 0;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 2rem;
+      animation: fadeIn .15s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    #overlay.allowed { background: #16a34a; }
+    #overlay.denied  { background: #dc2626; }
+    #overlay.show    { display: flex; }
+    #overlay .icon   { font-size: 5rem; line-height: 1; margin-bottom: 1rem; }
+    #overlay .result-label {
+      font-size: 2.5rem;
+      font-weight: 800;
+      letter-spacing: -.02em;
+      margin-bottom: .5rem;
+    }
+    #overlay .name {
+      font-size: 1.6rem;
+      font-weight: 600;
+      margin-bottom: .5rem;
+    }
+    #overlay .detail {
+      font-size: 1rem;
+      opacity: .85;
+    }
+  </style>
+</head>
+<body>
+  <div id="reader"></div>
+  <p id="status">카메라를 QR 코드에 가져다 대세요</p>
+
+  <div id="overlay">
+    <div class="icon" id="overlay-icon"></div>
+    <div class="result-label" id="overlay-label"></div>
+    <div class="name" id="overlay-name"></div>
+    <div class="detail" id="overlay-detail"></div>
+  </div>
+
+  <script>
+    let isProcessing = false;
+    let scanner;
+
+    async function onScanSuccess(token) {
+      if (isProcessing) return;
+      isProcessing = true;
+
+      try { scanner.pause(true); } catch (_) {}
+
+      try {
+        const url  = CONFIG.apiUrl + '?action=scan&token=' + encodeURIComponent(token);
+        const res  = await fetch(url);
+        const data = await res.json();
+        showResult(data);
+      } catch (_) {
+        showResult({ result: 'DENIED', reason: 'network_error' });
+      }
+    }
+
+    function showResult(data) {
+      const overlay = document.getElementById('overlay');
+      const allowed = data.result === 'ALLOWED';
+
+      overlay.className = 'show ' + (allowed ? 'allowed' : 'denied');
+      document.getElementById('overlay-icon').textContent  = allowed ? '✓' : '✗';
+      document.getElementById('overlay-label').textContent = allowed ? '입장 허용' : '입장 거부';
+      document.getElementById('overlay-name').textContent  = data.name || '';
+
+      const detailMap = {
+        already_entered: data.at
+          ? '오늘 이미 입장함 (' + formatTime(data.at) + ')'
+          : '오늘 이미 입장했습니다',
+        invalid_token:   '등록되지 않은 QR 코드',
+        network_error:   '서버 연결 오류',
+        server_busy:     '서버 혼잡 — 다시 시도하세요',
+      };
+      document.getElementById('overlay-detail').textContent =
+        detailMap[data.reason] || '';
+
+      playBeep(allowed);
+
+      setTimeout(() => {
+        overlay.className = '';
+        isProcessing = false;
+        try { scanner.resume(); } catch (_) {}
+      }, 3000);
+    }
+
+    function formatTime(iso) {
+      try {
+        return new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+      } catch (_) { return iso; }
+    }
+
+    function playBeep(allowed) {
+      try {
+        const ctx  = new (window.AudioContext || window.webkitAudioContext)();
+        const osc  = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        if (allowed) {
+          osc.frequency.value = 880;
+          osc.type = 'sine';
+          gain.gain.setValueAtTime(0.5, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+          osc.start(ctx.currentTime);
+          osc.stop(ctx.currentTime + 0.3);
+        } else {
+          osc.frequency.value = 220;
+          osc.type = 'square';
+          gain.gain.setValueAtTime(0.4, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+          osc.start(ctx.currentTime);
+          osc.stop(ctx.currentTime + 0.5);
+        }
+      } catch (_) {}
+    }
+
+    async function startScanner() {
+      scanner = new Html5Qrcode('reader');
+      try {
+        await scanner.start(
+          { facingMode: 'user' },
+          { fps: 10, qrbox: { width: 360, height: 360 } },
+          onScanSuccess,
+          () => {}  // scan failures are normal; suppress console noise
+        );
+        document.getElementById('status').textContent = '카메라를 QR 코드에 가져다 대세요';
+      } catch (err) {
+        document.getElementById('status').textContent =
+          '카메라 접근 권한이 필요합니다. 브라우저 설정에서 허용해주세요.';
+      }
+    }
+
+    startScanner();
+  </script>
+</body>
+</html>

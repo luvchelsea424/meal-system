@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>관리자 패널</title>
+  <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f9fafb;
+      color: #111;
+    }
+    /* ── Password modal ── */
+    #pw-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    #pw-modal.hidden { display: none; }
+    .pw-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 2rem;
+      width: min(360px, 92vw);
+      box-shadow: 0 8px 24px rgba(0,0,0,.2);
+    }
+    .pw-card h2 { margin-bottom: 1rem; }
+    .pw-card input {
+      width: 100%;
+      padding: .6rem .75rem;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 1rem;
+      margin-bottom: .75rem;
+    }
+    .pw-card button {
+      width: 100%;
+      padding: .7rem;
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .pw-card button:hover { background: #4f46e5; }
+    #pw-error { color: #b91c1c; font-size: .85rem; margin-top: .5rem; display: none; }
+
+    /* ── Layout ── */
+    header {
+      background: #fff;
+      border-bottom: 1px solid #e5e7eb;
+      padding: .9rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 { font-size: 1.1rem; }
+    #logout-btn {
+      font-size: .85rem;
+      color: #6b7280;
+      background: none;
+      border: none;
+      cursor: pointer;
+    }
+    main { padding: 1.5rem; max-width: 1100px; margin: 0 auto; }
+
+    /* ── Tabs ── */
+    .tabs { display: flex; gap: .5rem; margin-bottom: 1.5rem; }
+    .tab {
+      padding: .5rem 1.1rem;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+      background: #fff;
+      font-size: .9rem;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .tab.active { background: #6366f1; color: #fff; border-color: #6366f1; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Tables ── */
+    .table-wrap { overflow-x: auto; background: #fff; border-radius: 10px; border: 1px solid #e5e7eb; }
+    table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+    th { background: #f3f4f6; padding: .65rem 1rem; text-align: left; font-size: .8rem; color: #6b7280; }
+    td { padding: .65rem 1rem; border-top: 1px solid #f3f4f6; vertical-align: middle; }
+    tr:hover td { background: #fafafa; }
+
+    /* ── Badges ── */
+    .badge {
+      display: inline-block;
+      padding: .15rem .6rem;
+      border-radius: 999px;
+      font-size: .75rem;
+      font-weight: 600;
+    }
+    .badge-green { background: #dcfce7; color: #15803d; }
+    .badge-gray  { background: #f3f4f6; color: #6b7280; }
+
+    /* ── Buttons ── */
+    .btn {
+      padding: .35rem .8rem;
+      border-radius: 6px;
+      border: none;
+      font-size: .8rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-red    { background: #fee2e2; color: #b91c1c; }
+    .btn-blue   { background: #dbeafe; color: #1d4ed8; }
+    .btn-purple { background: #ede9fe; color: #7c3aed; }
+    .btn:hover  { filter: brightness(.92); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* ── Form ── */
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; }
+    .form-group label { display: block; font-size: .85rem; color: #555; margin-bottom: .3rem; }
+    .form-group input, .form-group select {
+      width: 100%;
+      padding: .55rem .75rem;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: .95rem;
+    }
+    .form-group input:focus, .form-group select:focus { outline: 2px solid #6366f1; border-color: transparent; }
+    #add-submit {
+      margin-top: 1.25rem;
+      padding: .65rem 2rem;
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: .95rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #add-submit:hover { background: #4f46e5; }
+
+    /* ── Date picker row ── */
+    .log-controls { display: flex; gap: .75rem; align-items: center; margin-bottom: 1rem; }
+    .log-controls input[type=date] {
+      padding: .5rem .75rem;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: .95rem;
+    }
+    .log-controls button {
+      padding: .5rem 1rem;
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: .9rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1f2937;
+      color: #fff;
+      padding: .65rem 1.25rem;
+      border-radius: 8px;
+      font-size: .9rem;
+      opacity: 0;
+      transition: opacity .2s;
+      pointer-events: none;
+      z-index: 200;
+    }
+    #toast.show { opacity: 1; }
+
+    /* ── QR modal ── */
+    #qr-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 150;
+    }
+    #qr-modal.show { display: flex; }
+    .qr-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 2rem;
+      text-align: center;
+      box-shadow: 0 8px 24px rgba(0,0,0,.2);
+    }
+    .qr-card h3 { margin-bottom: 1rem; }
+    .qr-card canvas { display: block; margin: 0 auto 1rem; }
+    .qr-card-btns { display: flex; gap: .75rem; justify-content: center; }
+    .msg { color: #6b7280; font-size: .9rem; margin-top: .75rem; }
+
+    @media (max-width: 640px) {
+      main { padding: 1rem; }
+      .form-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Password modal -->
+<div id="pw-modal">
+  <div class="pw-card">
+    <h2>관리자 로그인</h2>
+    <input type="password" id="pw-input" placeholder="비밀번호" autocomplete="current-password">
+    <button id="pw-submit">로그인</button>
+    <p id="pw-error">비밀번호가 올바르지 않습니다.</p>
+  </div>
+</div>
+
+<!-- QR preview modal -->
+<div id="qr-modal">
+  <div class="qr-card">
+    <h3 id="qr-modal-title"></h3>
+    <canvas id="qr-modal-canvas"></canvas>
+    <div class="qr-card-btns">
+      <button class="btn btn-blue" id="qr-download-btn">저장하기</button>
+      <button class="btn btn-red" id="qr-email-btn">이메일 발송</button>
+      <button class="btn btn-gray" onclick="closeQRModal()" style="background:#f3f4f6;color:#374151">닫기</button>
+    </div>
+    <p class="msg" id="qr-email-status"></p>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<header>
+  <h1>급식 관리자 패널</h1>
+  <button id="logout-btn">로그아웃</button>
+</header>
+
+<main>
+  <div class="tabs">
+    <button class="tab active" data-tab="students">학생 목록</button>
+    <button class="tab" data-tab="log">입장 로그</button>
+    <button class="tab" data-tab="add">학생 추가</button>
+  </div>
+
+  <!-- Students tab -->
+  <div class="tab-panel active" id="tab-students">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>학년</th><th>반</th><th>번호</th><th>이름</th>
+            <th>이메일</th><th>발급여부</th><th>발급일시</th><th>작업</th>
+          </tr>
+        </thead>
+        <tbody id="students-tbody">
+          <tr><td colspan="8" style="text-align:center;padding:2rem;color:#9ca3af">불러오는 중...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Log tab -->
+  <div class="tab-panel" id="tab-log">
+    <div class="log-controls">
+      <input type="date" id="log-date">
+      <button id="log-fetch-btn">조회</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>시간</th><th>이름</th><th>학년-반-번호</th><th>결과</th><th>사유</th></tr>
+        </thead>
+        <tbody id="log-tbody">
+          <tr><td colspan="5" style="text-align:center;padding:2rem;color:#9ca3af">날짜를 선택하세요</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Add student tab -->
+  <div class="tab-panel" id="tab-add">
+    <div class="table-wrap" style="padding:1.5rem">
+      <form id="add-form">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>학년</label>
+            <select name="grade" required>
+              <option value="">선택</option>
+              <option>1</option><option>2</option><option>3</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>반</label>
+            <input type="number" name="class" min="1" max="20" required>
+          </div>
+          <div class="form-group">
+            <label>번호</label>
+            <input type="number" name="number" min="1" max="50" required>
+          </div>
+          <div class="form-group">
+            <label>이름</label>
+            <input type="text" name="name" required>
+          </div>
+          <div class="form-group" style="grid-column: 1 / -1">
+            <label>이메일 (선택)</label>
+            <input type="email" name="email">
+          </div>
+        </div>
+        <button type="submit" id="add-submit">학생 추가</button>
+      </form>
+    </div>
+  </div>
+</main>
+
+<script>
+  // ── State ─────────────────────────────────────────────────────────────────────
+  let password = '';
+  let studentsCache = [];
+  let currentQRStudent = null;
+
+  // ── Auth ──────────────────────────────────────────────────────────────────────
+  function getPassword() {
+    return sessionStorage.getItem('adminPw') || '';
+  }
+
+  document.getElementById('pw-submit').addEventListener('click', async () => {
+    const pw = document.getElementById('pw-input').value;
+    document.getElementById('pw-error').style.display = 'none';
+
+    // Verify by attempting list_students
+    const res = await adminPost({ adminAction: 'list_students', password: pw });
+    if (res.error) {
+      document.getElementById('pw-error').style.display = 'block';
+      return;
+    }
+
+    sessionStorage.setItem('adminPw', pw);
+    password = pw;
+    document.getElementById('pw-modal').classList.add('hidden');
+    studentsCache = res.students || [];
+    renderStudents(studentsCache);
+  });
+
+  document.getElementById('pw-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('pw-submit').click();
+  });
+
+  document.getElementById('logout-btn').addEventListener('click', () => {
+    sessionStorage.removeItem('adminPw');
+    location.reload();
+  });
+
+  // ── Tabs ──────────────────────────────────────────────────────────────────────
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    });
+  });
+
+  // ── Students ──────────────────────────────────────────────────────────────────
+  function renderStudents(students) {
+    const tbody = document.getElementById('students-tbody');
+    if (!students.length) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:2rem;color:#9ca3af">등록된 학생이 없습니다</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = students.sort((a, b) => {
+      if (a.grade !== b.grade) return a.grade - b.grade;
+      if (a.class !== b.class) return a.class - b.class;
+      return a.number - b.number;
+    }).map(s => {
+      const claimed    = s.claimed === true || s.claimed === 'TRUE';
+      const badgeHtml  = claimed
+        ? '<span class="badge badge-green">발급완료</span>'
+        : '<span class="badge badge-gray">미발급</span>';
+      const claimedAt  = s.claimed_at
+        ? new Date(s.claimed_at).toLocaleString('ko-KR') : '-';
+
+      const reissueBtn = `<button class="btn btn-red" onclick="reissue(${s.grade},${s.class},${s.number},'${s.name}')">재발급</button>`;
+      const qrBtn      = claimed
+        ? `<button class="btn btn-purple" onclick="showQR(${s.grade},${s.class},${s.number})">QR 보기</button>` : '';
+
+      return `<tr>
+        <td>${s.grade}</td><td>${s.class}</td><td>${s.number}</td><td>${s.name}</td>
+        <td>${s.email || '-'}</td><td>${badgeHtml}</td><td>${claimedAt}</td>
+        <td style="display:flex;gap:.4rem">${reissueBtn}${qrBtn}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  async function reissue(grade, cls, number, name) {
+    if (!confirm(name + ' 학생의 QR을 재발급하시겠습니까?\n기존 QR은 즉시 무효가 됩니다.')) return;
+    const res = await adminPost({ adminAction: 'reissue', grade, class: cls, number });
+    if (res.error) { toast('오류: ' + res.error); return; }
+    toast(name + ' 학생 QR 재발급 완료');
+    await refreshStudents();
+  }
+
+  async function refreshStudents() {
+    const res = await adminPost({ adminAction: 'list_students' });
+    if (!res.error) {
+      studentsCache = res.students || [];
+      renderStudents(studentsCache);
+    }
+  }
+
+  // ── QR modal ──────────────────────────────────────────────────────────────────
+  function showQR(grade, cls, number) {
+    const student = studentsCache.find(s => Number(s.grade) === grade && Number(s.class) === cls && Number(s.number) === number);
+    if (!student || !student.token) { toast('QR 토큰을 찾을 수 없습니다'); return; }
+
+    currentQRStudent = student;
+    document.getElementById('qr-modal-title').textContent =
+      student.name + ' (' + student.grade + '-' + student.class + '-' + student.number + ')';
+    document.getElementById('qr-email-status').textContent = '';
+
+    const canvas = document.getElementById('qr-modal-canvas');
+    QRCode.toCanvas(canvas, student.token, { width: 200, margin: 2 });
+    document.getElementById('qr-modal').classList.add('show');
+
+    document.getElementById('qr-download-btn').onclick = () => {
+      const link    = document.createElement('a');
+      link.download = '급식QR_' + student.name + '.png';
+      link.href     = canvas.toDataURL('image/png');
+      link.click();
+    };
+
+    const emailBtn = document.getElementById('qr-email-btn');
+    emailBtn.style.display = student.email ? '' : 'none';
+    emailBtn.onclick = () => sendQREmail(student);
+  }
+
+  function closeQRModal() {
+    document.getElementById('qr-modal').classList.remove('show');
+    currentQRStudent = null;
+  }
+
+  // Close modal on backdrop click
+  document.getElementById('qr-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeQRModal();
+  });
+
+  async function sendQREmail(student) {
+    const baseUrl = location.origin + location.pathname.replace('admin.html', 'view.html');
+    const qrUrl   = baseUrl + '?token=' + encodeURIComponent(student.token);
+    const statusEl = document.getElementById('qr-email-status');
+
+    statusEl.textContent = '발송 중...';
+    const res = await adminPost({ adminAction: 'email_qr', grade: student.grade, class: student.class, number: student.number, qr_url: qrUrl });
+    statusEl.textContent = res.error ? '오류: ' + res.error : '이메일이 발송되었습니다.';
+  }
+
+  // ── Entry log ─────────────────────────────────────────────────────────────────
+  const logDateInput = document.getElementById('log-date');
+  logDateInput.value = new Date().toISOString().slice(0, 10);
+
+  document.getElementById('log-fetch-btn').addEventListener('click', fetchLog);
+
+  async function fetchLog() {
+    const date = logDateInput.value;
+    const res  = await adminPost({ adminAction: 'list_entries', date });
+    if (res.error) { toast('오류: ' + res.error); return; }
+
+    const tbody  = document.getElementById('log-tbody');
+    const entries = res.entries || [];
+
+    if (!entries.length) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:2rem;color:#9ca3af">해당 날짜의 기록이 없습니다</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = entries.map(e => {
+      const time   = e.scanned_at ? new Date(e.scanned_at).toLocaleTimeString('ko-KR') : '-';
+      const status = e.status === 'ALLOWED'
+        ? '<span class="badge badge-green">허용</span>'
+        : '<span class="badge" style="background:#fee2e2;color:#b91c1c">거부</span>';
+      const reasonMap = { already_entered: '중복 입장', invalid_token: '잘못된 QR', '': '-' };
+      return `<tr>
+        <td>${time}</td><td>${e.name}</td><td>${e.grade}-${e.class}-${e.number}</td>
+        <td>${status}</td><td>${reasonMap[e.deny_reason] || e.deny_reason || '-'}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // ── Add student ───────────────────────────────────────────────────────────────
+  document.getElementById('add-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd  = new FormData(e.target);
+    const btn = document.getElementById('add-submit');
+    btn.disabled = true;
+
+    const body = {
+      adminAction: 'add_student',
+      grade:  fd.get('grade'),
+      class:  fd.get('class'),
+      number: fd.get('number'),
+      name:   fd.get('name'),
+      email:  fd.get('email'),
+    };
+
+    const res = await adminPost(body);
+    btn.disabled = false;
+
+    if (res.error) { toast('오류: ' + res.error); return; }
+    toast('학생이 추가되었습니다 (' + body.grade + '-' + body.class + '-' + body.number + ')');
+    e.target.reset();
+    await refreshStudents();
+  });
+
+  // ── API helpers ───────────────────────────────────────────────────────────────
+  async function adminPost(body) {
+    try {
+      const res = await fetch(CONFIG.apiUrl + '?action=admin', {
+        method:  'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body:    JSON.stringify({ ...body, password: password || getPassword() }),
+      });
+      return await res.json();
+    } catch (err) {
+      return { error: '서버 연결 오류' };
+    }
+  }
+
+  // ── Toast ──────────────────────────────────────────────────────────────────────
+  let toastTimer;
+  function toast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────────
+  (function init() {
+    const savedPw = getPassword();
+    if (savedPw) {
+      password = savedPw;
+      document.getElementById('pw-modal').classList.add('hidden');
+      refreshStudents();
+    }
+    // Default log date to today
+    logDateInput.value = new Date().toISOString().slice(0, 10);
+  })();
+</script>
+</body>
+</html>
