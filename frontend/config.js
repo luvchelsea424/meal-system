@@ -2,5 +2,5 @@
 // Deploy → New Deployment → Web App → Execute as: Me, Who has access: Anyone
 const CONFIG = {
   //prod 
-  apiUrl: 'https://script.google.com/macros/s/AKfycbw0cswo6xFKIipswl7qZvsnfWz-w_3UvfiHsXtlLVN6U80ktsn8GHA3zlMB3b2ToKpG4Q/exec'
+  apiUrl: 'https://script.google.com/macros/s/AKfycbzyXik4cb7fq26mVQYqT0GpV7pKDyTBAoGIMhFYDGub_rbuaBJhw_2IQC_FCtiGNH5F/exec'
 };
