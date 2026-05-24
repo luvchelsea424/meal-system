@@ -25,6 +25,7 @@ All code is already written. Follow the steps below in order.
 5. Note the **Spreadsheet ID** from the URL — the string between `/d/` and `/edit`.
 
 > The `today_entries` sheet is created automatically by Apps Script on the first QR scan. You do not need to create it manually.
+> On the first scan after midnight (KST), all data rows from the previous day are automatically deleted (header row is kept). The permanent entry log accumulates separately in the `entries` sheet.
 
 ---
 
